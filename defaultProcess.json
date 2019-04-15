@@ -1,0 +1,442 @@
+{
+  "processDefinition": {
+    "name": "marketing-general",
+    "steps": [
+      {
+        "type": "FacebookMarketing",
+        "name": "get_ads_accounts",
+        "properties": {
+          "url": "me/adaccounts",
+          "isSingleObject": false,
+          "fields": [
+            "id",
+            "name"
+          ]
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "get_account_related_data"
+          },
+          {
+            "name": "success",
+            "destination": "get_archived"
+          }
+        ],
+        "itemAttributes": {
+          "accountId": "@{evalJson(item, '$.id')}"
+        },
+        "x": 270,
+        "y": 0
+      },
+      {
+        "type": "DeleteFromDB",
+        "name": "clean_tables",
+        "properties": {
+          "tables": [
+            "ad",
+            "ad_set",
+            "campaign",
+            "account"
+          ]
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "get_ads_accounts"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 0,
+        "y": 0
+      },
+      {
+        "type": "FacebookMarketing",
+        "name": "get_archived",
+        "properties": {
+          "batchRequests": {
+            "Campaigns": {
+              "url": "@{item.attributes.accountId}/campaigns",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500,
+                "effective_status": "[\"ARCHIVED\"]"
+              },
+              "fields": [
+                "id",
+                "name",
+                "objective",
+                "account_id",
+                "start_time",
+                "effective_status",
+                "created_time"
+              ]
+            },
+            "AdSets": {
+              "url": "@{item.attributes.accountId}/adsets",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500,
+                "effective_status": "[\"ARCHIVED\"]"
+              },
+              "fields": [
+                "id",
+                "name",
+                "campaign_id",
+                "end_time",
+                "start_time",
+                "daily_budget",
+                "created_time",
+                "lifetime_budget",
+                "effective_status"
+              ]
+            },
+            "Ads": {
+              "url": "@{item.attributes.accountId}/ads",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500,
+                "effective_status": "[\"ARCHIVED\"]"
+              },
+              "fields": [
+                "id",
+                "name",
+                "adset_id",
+                "effective_status",
+                "created_time",
+                "updated_time"
+              ]
+            }
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "split_campaigns",
+            "condition": "@{item.attributes.requestName  == 'Campaigns'}"
+          },
+          {
+            "name": "success",
+            "destination": "split_ads",
+            "condition": "@{item.attributes.requestName  == 'Ads'}"
+          },
+          {
+            "name": "success",
+            "destination": "split_ad_sets",
+            "condition": "@{item.attributes.requestName  == 'AdSets'}"
+          }
+        ],
+        "itemAttributes": {
+          "requestName": "@{evalJson(item, '$.requestName')}"
+        },
+        "x": 540,
+        "y": 0
+      },
+      {
+        "type": "FacebookMarketing",
+        "name": "get_account_related_data",
+        "properties": {
+          "batchRequests": {
+            "Account": {
+              "url": "@{item.attributes.accountId}",
+              "isSingleObject": true,
+              "fields": [
+                "id",
+                "name",
+                "created_time"
+              ]
+            },
+            "Campaigns": {
+              "url": "@{item.attributes.accountId}/campaigns",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500
+              },
+              "fields": [
+                "id",
+                "name",
+                "objective",
+                "account_id",
+                "start_time",
+                "end_time",
+                "effective_status",
+                "created_time"
+              ]
+            },
+            "AdSets": {
+              "url": "@{item.attributes.accountId}/adsets",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500
+              },
+              "fields": [
+                "id",
+                "name",
+                "campaign_id",
+                "end_time",
+                "start_time",
+                "daily_budget",
+                "created_time",
+                "lifetime_budget",
+                "effective_status"
+              ]
+            },
+            "Ads": {
+              "url": "@{item.attributes.accountId}/ads",
+              "isSingleObject": false,
+              "parameters": {
+                "limit": 500
+              },
+              "fields": [
+                "id",
+                "name",
+                "adset_id",
+                "effective_status",
+                "created_time",
+                "updated_time"
+              ]
+            }
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "map_account",
+            "condition": "@{item.attributes.requestName  == 'Account'}"
+          },
+          {
+            "name": "success",
+            "destination": "split_campaigns",
+            "condition": "@{item.attributes.requestName  == 'Campaigns'}"
+          },
+          {
+            "name": "success",
+            "destination": "split_ad_sets",
+            "condition": "@{item.attributes.requestName  == 'AdSets'}"
+          },
+          {
+            "name": "success",
+            "destination": "split_ads",
+            "condition": "@{item.attributes.requestName  == 'Ads'}"
+          }
+        ],
+        "itemAttributes": {
+          "requestName": "@{evalJson(item, '$.requestName')}"
+        },
+        "x": 540,
+        "y": 360
+      },
+      {
+        "type": "SplitJsonArray",
+        "name": "split_ads",
+        "properties": {
+          "array": "@{evalJson(item, '$.data')}"
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "map_ads",
+            "condition": "@{toDateTime(evalJson(item, '$.created_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ').isAfter(toDate('2015-01-01', 'yyyy-MM-dd').atStartOfDay())}"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 810,
+        "y": 360
+      },
+      {
+        "type": "ToMap",
+        "name": "map_ads",
+        "properties": {
+          "mappings": {
+            "id": "@{evalJson(item, '$.id')}",
+            "name": "@{evalJson(item, '$.name')}",
+            "adgroup_status": "@{evalJson(item, '$.effective_status')}",
+            "ad_set_id": "@{evalJson(item, '$.adset_id')}",
+            "updated_time": "@{toDateTime(evalJson(item, '$.updated_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ')}"
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "save_ads"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 1080,
+        "y": 360,
+        "propertiesString": "{\n\t\"mappings\": {\n\t\t\"id\": \"@{evalJson(item, '$.id')}\",\n\t\t\"name\": \"@{evalJson(item, '$.name')}\",\n\t\t\"adgroup_status\": \"@{evalJson(item, '$.effective_status')}\",\n\t\t\"ad_set_id\": \"@{evalJson(item, '$.adset_id')}\",\n\t\t\"updated_time\": \"@{toDateTime(evalJson(item, '$.updated_time'), 'yyyy-MM-dd\\\\'T\\\\'HH:mm:ssZ')}\"\n\t}\n}",
+        "attributesString": "{}"
+      },
+      {
+        "type": "InsertMapIntoDB",
+        "name": "save_ads",
+        "properties": {
+          "tableName": "ad",
+          "batchSize": 400
+        },
+        "outputs": [],
+        "itemAttributes": {},
+        "x": 1350,
+        "y": 360
+      },
+      {
+        "type": "SplitJsonArray",
+        "name": "split_ad_sets",
+        "properties": {
+          "array": "@{evalJson(item, '$.data')}"
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "map_ad_sets",
+            "condition": "@{toDateTime(evalJson(item, '$.created_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ').isAfter(toDate('2015-01-01', 'yyyy-MM-dd').atStartOfDay())}"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 810,
+        "y": 480
+      },
+      {
+        "type": "ToMap",
+        "name": "map_ad_sets",
+        "properties": {
+          "mappings": {
+            "id": "@{evalJson(item, '$.id')}",
+            "name": "@{evalJson(item, '$.name')}",
+            "campaign_id": "@{evalJson(item, '$.campaign_id')}",
+            "daily_budget": "@{evalJson(item, '$.daily_budget')}",
+            "lifetime_budget": "@{evalJson(item, '$.lifetime_budget')}",
+            "start_time": "@{toDateTime(evalJson(item, '$.start_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ')}",
+            "end_time": "@{toDateTime(evalJson(item, '$.end_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ')}"
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "save_ad_sets"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 1080,
+        "y": 480
+      },
+      {
+        "type": "InsertMapIntoDB",
+        "name": "save_ad_sets",
+        "properties": {
+          "tableName": "ad_set",
+          "batchSize": 400
+        },
+        "outputs": [],
+        "itemAttributes": {},
+        "x": 1350,
+        "y": 480
+      },
+      {
+        "type": "SplitJsonArray",
+        "name": "split_campaigns",
+        "properties": {
+          "array": "@{evalJson(item, '$.data')}"
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "map_campaigns",
+            "condition": "@{toDateTime(evalJson(item, '$.created_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ').isAfter(toDate('2015-01-01', 'yyyy-MM-dd').atStartOfDay())}"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 810,
+        "y": 600
+      },
+      {
+        "type": "ToMap",
+        "name": "map_campaigns",
+        "properties": {
+          "mappings": {
+            "id": "@{evalJson(item, '$.id')}",
+            "name": "@{evalJson(item, '$.name')}",
+            "objective": "@{evalJson(item, '$.objective')}",
+            "account_id": "act_@{evalJson(item, '$.account_id')}",
+            "campaign_group_status": "@{evalJson(item, '$.effective_status')}",
+            "start_time": "@{toDateTime(evalJson(item, '$.start_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ')}",
+            "end_time": "@{toDateTime(evalJson(item, '$.end_time'), 'yyyy-MM-dd\\'T\\'HH:mm:ssZ')}"
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "save_campaigns"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 1080,
+        "y": 600
+      },
+      {
+        "type": "InsertMapIntoDB",
+        "name": "save_campaigns",
+        "properties": {
+          "tableName": "campaign",
+          "batchSize": 400
+        },
+        "outputs": [],
+        "itemAttributes": {},
+        "x": 1350,
+        "y": 600
+      },
+      {
+        "type": "ToMap",
+        "name": "map_account",
+        "properties": {
+          "mappings": {
+            "id": "@{evalJson(item, '$.data.id')}",
+            "name": "@{evalJson(item, '$.data.name')}"
+          }
+        },
+        "outputs": [
+          {
+            "name": "success",
+            "destination": "save_account"
+          }
+        ],
+        "itemAttributes": {},
+        "x": 810,
+        "y": 720
+      },
+      {
+        "type": "InsertMapIntoDB",
+        "name": "save_account",
+        "properties": {
+          "tableName": "account",
+          "batchSize": 400
+        },
+        "itemAttributes": {},
+        "x": 1080,
+        "y": 720
+      }
+    ],
+    "excludes": [
+      "split_ad_sets",
+      "map_account",
+      "save_ads",
+      "split_ads",
+      "save_campaigns"
+    ],
+    "generalSteps": []
+  },
+  "extractor": {
+    "id": 0,
+    "timePeriod": 0,
+    "active": false,
+    "errorCounter": 0
+  },
+  "connectorCredentials": {
+    "id": 0,
+    "organizationId": 85,
+    "datasourceId": 165,
+    "refreshToken": "EAAGuoVILSX4BAMpL1no67En0EP76z6Ay1zrOolx0gQ4DgDZB7z5lZBgDKfddoED3gdRc9TkUTtAsTjrFtlgfkkUQy4IoJWcbZCJKMrQltijUZAz1tKKzAvDsSUZAdBhMhEqAX5O16vnVKTXn6EHxFBsZBq9Ot1Y42jSYka6E0uAwZDZD",
+    "datamart": "localhost",
+    "config": "{\"properties\":{\"pageId\":\"100230508074773910534\",\"domain\":\"mettrr\",\"customFields\":[{\"id\":360001124611,\"title\":\"3rd Line Tech Support (UK) Type of Change/Request\"},{\"id\":360001486852,\"title\":\"3rd Line Adwords management Type of Change/Request\"},{\"id\":360001486872,\"title\":\"3rd Line Product support Type of Change/Request\"},{\"id\":360001063512,\"title\":\"2nd Line Legacy CWT Type of Change/Request\"},{\"id\":360002165852,\"title\":\"Mark as Spam\"},{\"id\":360001063532,\"title\":\"3rd Line Accounts and Admin (UK) Type of Change/Request\"},{\"id\":360001062512,\"title\":\"2nd Line CWT Type of Change/Request\"},{\"id\":360001123991,\"title\":\"1st Line Type of Change/Request\"},{\"id\":360001124771,\"title\":\"3rd Line Content (UK) Type of Change/Request\"},{\"id\":360001227172,\"title\":\"Country\"},{\"id\":360001124011,\"title\":\"2nd Line CTT Type of Change/Request\"},{\"id\":360001227992,\"title\":\"Phone Number - Only from form submission\"}],\"clientCustomerIds\":[\"8670301477\"],\"reports\":[\"PLACEHOLDER_REPORT_Normal\",\"PLACEMENT_PERFORMANCE_REPORT_Normal\",\"PRODUCT_PARTITION_REPORT_Normal\",\"SEARCH_QUERY_PERFORMANCE_REPORT_Normal\",\"SHOPPING_PERFORMANCE_REPORT_ConversionSegmented\",\"SHOPPING_PERFORMANCE_REPORT_Normal\",\"TOP_CONTENT_PERFORMANCE_REPORT_Normal\",\"URL_PERFORMANCE_REPORT_ConversionSegmented\",\"URL_PERFORMANCE_REPORT_Normal\",\"USER_AD_DISTANCE_REPORT_Normal\",\"VIDEO_PERFORMANCE_REPORT_ConversionSegmented\",\"VIDEO_PERFORMANCE_REPORT_Normal\"]},\"to\":[],\"oauthAccessTokenSecret\":\"oLZCb0LjGWAmmTONV8ciiz9f6ng488dncQps2h1eo2s2D\"}"
+  }
+}
